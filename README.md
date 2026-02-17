@@ -1,57 +1,127 @@
 # Modern Data Stack
-The "Boring" Way to Build High-Performance Data Pipelines. Demo for modern data pipelines.
-
-### **Project Description: Embedded Modern Data Stack (EMDS)**
 
 **The "Boring" Way to Build High-Performance Data Pipelines.**
 
-This project is a tutorial and boilerplate for building a **serverless, local-first ELT pipeline**. It demonstrates how to replace complex, over-engineered architectures (like Spark clusters or cloud warehouses) with a lightweight "Embedded Data Stack" that runs entirely on a single node or even your laptop.
-
-#### **🚀 Why this stack?**
-
-* **"Boring is Better":** Eliminates technical debt by removing the need for standalone database servers (Postgres) or cloud warehouses (Snowflake) for small-to-medium datasets.
-
-
-* **Zero-Copy Performance:** Leverages **Apache Arrow** to share memory instantly between **DuckDB** and **Polars**, allowing for lightning-fast handoffs between SQL transformations and Python DataFrame processing without data serialization overhead.
-
-
-* **Local-First Storage:** Uses the local file system as a high-performance "Data Lake" with **Parquet** files, skipping the ingestion step entirely by querying files where they sit.
-
-
-
-#### **🛠️ The Stack**
-
-* **Ingestion:** [dlt (Data Load Tool)]() for automated, schema-aware API data landing.
-
-
-* **Storage:** Local **Parquet** files for efficient, columnar data storage.
-
-
-* **Transformation Engine:** [DuckDB]() for serverless SQL filtering and joins.
-
-
-* **Processing Engine:** [Polars]() for complex, multi-threaded Python-native transformations and rolling aggregations.
-
-
-* **Orchestration Logic:** Structured like a **dbt** project (Staging vs. Marts) but implemented in modular Python scripts.
-
-
-
-#### **📖 What You'll Learn**
-
-1. How to land raw API data into a local data lake using **dlt**.
-
-
-2. How to use **DuckDB** to clean and filter millions of rows in milliseconds using standard SQL.
-
-
-3. How to perform "Zero-Copy" handoffs to **Polars** for complex logic that SQL struggles with.
-
-
-4. How to implement **Incremental Loading** (the "Lookback" pattern) so your pipeline only processes new data.
-
-
+A serverless, local-first ELT pipeline boilerplate using the **Embedded Data Stack** architecture. Replace complex cloud infrastructure with a lightweight stack that runs entirely on your laptop.
 
 ---
 
-Inspired by the philosophy that the best data pipeline is the one you don't have to build.
+## 🛠️ The Stack
+
+| Layer | Tool | Role |
+|---|---|---|
+| **Ingestion** | [dlt](https://dlthub.com/) | Schema-aware API data landing with incremental loading |
+| **Storage** | Parquet (local) | Columnar data lake on the filesystem |
+| **Transformation** | [DuckDB](https://duckdb.org/) | In-process SQL filtering, joins, and type-casting |
+| **Processing** | [Polars](https://pola.rs/) | Multi-threaded DataFrame aggregations |
+| **Glue** | [Apache Arrow](https://arrow.apache.org/) | Zero-copy memory sharing between DuckDB ↔ Polars |
+
+---
+
+## 📁 Project Structure
+
+```
+modern-data-stack/
+├── pipeline.py              # Main orchestrator (entry point)
+├── ingest.py                # dlt: GitHub API → data/raw/ Parquet
+├── transform/
+│   ├── staging.py           # DuckDB: SQL cleaning → data/staging/
+│   └── marts.py             # Polars: incremental aggregation → data/marts/
+├── data/
+│   ├── raw/                 # Raw API data (Parquet)
+│   ├── staging/             # Cleaned data (Parquet)
+│   └── marts/               # Aggregated tables (Parquet)
+├── pyproject.toml           # Dependencies
+├── .env.example             # Environment variable template
+└── README.md
+```
+
+---
+
+## 🚀 Quickstart
+
+### 1. Prerequisites
+
+- Python ≥ 3.10
+- [uv](https://docs.astral.sh/uv/) (recommended package manager)
+
+### 2. Install
+
+```bash
+# Clone the repo
+git clone <your-repo-url> && cd modern-data-stack
+
+# Create a virtual environment & install deps
+uv sync
+```
+
+### 3. Configure (optional)
+
+```bash
+cp .env.example .env
+# Edit .env to set GITHUB_TOKEN for higher API rate limits
+```
+
+### 4. Run the pipeline
+
+```bash
+# Full ELT: ingest → staging → marts
+uv run python pipeline.py
+
+# Fetch a specific GitHub org
+uv run python pipeline.py --org python
+
+# Skip ingestion, re-run transforms only
+uv run python pipeline.py --skip-ingest
+
+# Wider lookback window for incremental processing
+uv run python pipeline.py --lookback-days 30
+```
+
+---
+
+## 🏗️ Architecture — Zero-Copy Arrow Flow
+
+```
+GitHub API
+    │
+    ▼
+┌────────────┐   Parquet    ┌────────────┐  Arrow Table  ┌────────────┐
+│  dlt       │ ──────────►  │  DuckDB    │ ────────────► │  Polars    │
+│  (ingest)  │  data/raw/   │  (staging) │  zero-copy    │  (marts)   │
+└────────────┘              └────────────┘               └────────────┘
+                               │                             │
+                               ▼                             ▼
+                         data/staging/                  data/marts/
+                         repos.parquet              repos_per_language.parquet
+                                                    daily_activity.parquet
+```
+
+**Key principle**: DuckDB's `.arrow()` method returns an Apache Arrow table. Polars' `pl.from_arrow()` wraps it *without copying memory*. This means the DuckDB → Polars handoff is essentially free regardless of data size.
+
+---
+
+## 📖 What You'll Learn
+
+1. How to land raw API data into a local data lake using **dlt** with incremental loading.
+2. How to use **DuckDB** to clean and type-cast data using standard SQL.
+3. How to perform **zero-copy** handoffs from DuckDB to **Polars** via Apache Arrow.
+4. How to implement the **Lookback** pattern for incremental processing so your pipeline only touches new data.
+5. How to structure a Python project like **dbt** (Staging vs. Marts) without needing dbt itself.
+
+---
+
+## 🔬 Technical Deep-Dive
+
+See [TECHNICAL.md](TECHNICAL.md) for detailed documentation on:
+- The zero-copy Arrow handoff mechanism
+- The incremental lookback pattern
+- Layer responsibilities (staging vs. marts)
+- How to extend the pipeline with new sources and marts
+- Performance characteristics
+
+---
+
+## License
+
+[MIT](LICENSE)
